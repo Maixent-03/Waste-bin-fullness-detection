@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Bin Fill Level Detection</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #2c5f2d 0%, #4a7c59 50%, #6fa372 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+        }
+        h1 {
+            text-align: center;
+            padding: 30px;
+            background: linear-gradient(45deg, #2c5f2d, #4a7c59);
+            color: white;
+            margin: 0;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        .subtitle {
+            background: linear-gradient(45deg, #4a7c59, #6fa372);
+            color: white;
+            text-align: center;
+            padding: 15px;
+            font-size: 1.2em;
+            margin: 0;
+        }
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            padding: 30px;
+        }
+        .upload-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            cursor: pointer;
+            width: 100%;
+        }
+        .file-input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        .file-input-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 20px;
+            background: linear-gradient(45deg, #2c5f2d, #4a7c59);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(44, 95, 45, 0.3);
+        }
+        .file-input-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(44, 95, 45, 0.4);
+        }
+        .analyze-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 15px 30px;
+            background: linear-gradient(45deg, #6fa372, #8db386);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(111, 163, 114, 0.3);
+        }
+        .analyze-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(111, 163, 114, 0.4);
+        }
+        .analyze-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .analyze-button:active:not(:disabled) {
+            background: #ccc;
+            transform: translateY(0px);
+            box-shadow: 0 2px 8px rgba(111, 163, 114, 0.2);
+        }
+        .preview-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        .image-container {
+            position: relative;
+            width: 100%;
+            min-width: 400px;
+            min-height: 300px;
+            aspect-ratio: 4/3;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+        }
+        #mainCanvas {
+            border: 3px dashed #4a7c59 !important;
+            box-sizing: border-box !important;
+            pointer-events: none !important;
+            min-width: 400px;
+            min-height: 300px;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            display: block;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        #mainCanvas.frozen {
+            border: 3px solid #dc3545 !important;
+            box-shadow: 0 0 20px rgba(220, 53, 69, 0.3) !important;
+        }
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 18px;
+        }
+        .styled-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: linear-gradient(90deg, #4a7c59 0%, #8db386 100%);
+            outline: none;
+            transition: background 0.3s;
+            margin-top: 8px;
+            margin-bottom: 8px;
+            box-shadow: 0 2px 6px rgba(44,95,45,0.08);
+            cursor: pointer;
+            padding: 0;
+        }
+        .styled-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #388e3c;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 6px rgba(44,95,45,0.2);
+            cursor: pointer;
+            transition: background 0.3s, transform 0.2s;
+            margin-top: -7px;
+        }
+        .styled-slider:focus::-webkit-slider-thumb {
+            background: #2c5f2d;
+            transform: scale(1.08);
+        }
+        .styled-slider::-webkit-slider-runnable-track {
+            height: 8px;
+            border-radius: 5px;
+            background: linear-gradient(90deg, #4a7c59 0%, #8db386 100%);
+        }
+        .styled-slider:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px #8db38655;
+        }
+        .placeholder-text {
+            color: #999;
+            font-size: 1.1em;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            pointer-events: none;
+        }
+        .results-section {
+            grid-column: 1 / -1;
+            margin-top: 20px;
+        }
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+        .results-box {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+            border-left: 5px solid #4a7c59;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .results-box:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
+        }
+        .results-box h3 {
+            color: #2c5f2d;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .fill-level-indicator {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin: 5px;
+            font-size: 0.9em;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .fill-level-empty {
+            background: linear-gradient(45deg, #4a7c59, #6fa372);
+            color: white;
+        }
+        .fill-level-full {
+            background: linear-gradient(45deg, #dc3545, #e85563);
+            color: white;
+        }
+        .fill-level-overloaded {
+            background: linear-gradient(45deg, #d63384, #e85aa1);
+            color: white;
+        }
+        .bin-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+        .stat-item {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 12px;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+        .stat-item:hover {
+            border-color: #4a7c59;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(74, 124, 89, 0.1);
+        }
+        .stat-value {
+            font-size: clamp(1em, 6vw, 1.5em); /* Responsive font size based on box width */
+            font-weight: bold;
+            color: #2c5f2d;
+            margin-bottom: 8px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+            word-break: break-word;
+            white-space: normal;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: #4a7c59;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4a7c59;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .model-status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            background: linear-gradient(45deg, #d4edda, #c3e6cb);
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            text-align: center;
+        }
+        .model-status.loading {
+            background: linear-gradient(45deg, #fff3cd, #ffeaa7);
+            color: #856404;
+            border-color: #ffeaa7;
+        }
+        .model-status.error {
+            background: linear-gradient(45deg, #f8d7da, #f5c6cb);
+            color: #721c24;
+            border-color: #f5c6cb;
+        }
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #f5c6cb;
+            margin: 10px 0;
+        }
+        .tips-section {
+            background: #e8f5e8;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            border-left: 5px solid #4a7c59;
+        }
+        .tips-section h4 {
+            color: #2c5f2d;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+        .tips-section ul {
+            color: #2c5f2d;
+            line-height: 1.6;
+            padding-left: 20px;
+        }
+        .tips-section li {
+            margin-bottom: 8px;
+        }
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            .results-grid {
+                grid-template-columns: 1fr;
+            }
+            .bin-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            h1 {
+                font-size: 2em;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗑️ Smart Bin Monitor</h1>
+        <div class="subtitle">AI-Powered Waste Bin Fill Level Detection System - Flask + YOLO11s</div>
+        <div class="main-content">
+            <div class="upload-section">
+                <div class="model-status" id="modelStatus">
+                    ✅ Flask server ready for YOLO11s detection
+                </div>
+                
+                <button id="stopRealtimeBtn" style="margin-bottom:20px; display:none;" class="analyze-button">⏹️ Stop Monitoring</button>
+                <button id="startRealtimeBtn" class="analyze-button" style="margin-bottom:20px;">
+                    📷 Start Real-time Monitoring
+                </button>
+                
+                <!-- Image upload section (hidden during real-time) -->
+                <div id="imageUploadSection">
+                    <div class="file-input-wrapper" style="margin-bottom:20px;">
+                        <input type="file" id="imageInput" class="file-input" accept="image/*">
+                        <div class="file-input-button">
+                            📷 Upload Bin Image
+                        </div>
+                    </div>
+                    
+                    <button id="analyzeButton" class="analyze-button" disabled style="margin-bottom:20px;">
+                        🔍 Analyze Fill Level
+                    </button>
+                </div>
+                
+                <!-- Real-time analysis controls (shown during real-time) -->
+                <div id="realtimeControls" style="display:none;">
+                    <button id="freezeAnalyzeBtn" class="analyze-button" style="margin-bottom:20px;">
+                        ❄️ Freeze & Analyze
+                    </button>
+                    <button id="unfreezeBtn" class="analyze-button" style="display:none; margin-bottom:20px;">
+                        ▶️ Unfreeze Video
+                    </button>
+                </div>
+                <div class="model-params-section" style="background:#e8f5e8; border-radius:10px; padding:20px; margin-top:20px; border-left:5px solid #4a7c59;">
+                    <h4 style="color:#2c5f2d; margin-bottom:18px;">⚙️ Detection Parameters</h4>
+                    <div class="slider-group">
+                        <label for="iouSlider"><strong>IoU Threshold:</strong> <span id="iouValue" style="color:#388e3c;">0.5</span></label>
+                        <input type="range" min="0.05" max="0.95" step="0.01" value="0.5" id="iouSlider" class="styled-slider">
+                    </div>
+                    <div class="slider-group">
+                        <label for="confSlider"><strong>Confidence Threshold:</strong> <span id="confValue" style="color:#388e3c;">0.85</span></label>
+                        <input type="range" min="0.01" max="0.99" step="0.01" value="0.50" id="confSlider" class="styled-slider">
+                    </div>
+                </div>
+            </div>
+            <div class="preview-section">
+                <div class="image-container" id="imageContainer">
+                    <canvas id="mainCanvas" width="640" height="480"></canvas>
+                    <div class="placeholder-text" id="placeholderText">
+                        <span style="font-size: 3em;">🗑️</span>
+                        <span>No bin image or video</span>
+                        <span style="font-size: 0.9em; color: #666;">Upload an image or start real-time monitoring</span>
+                    </div>
+                </div>
+            </div>
+            <div class="results-section">
+                <div class="results-grid">
+                    <div class="results-box">
+                        <h3>📊 YOLO Detection Results</h3>
+                        <div id="results">
+                            <p>Bin analysis results will appear here after processing...</p>
+                        </div>
+                    </div>
+                    <div class="results-box">
+                        <h3>📈 Fill Level Statistics</h3>
+                        <div class="bin-stats" id="binStats">
+                            <div class="stat-item">
+                                <div class="stat-value" id="fillStatus">-</div>
+                                <div class="stat-label">Overall Status</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value" id="binCount">-</div>
+                                <div class="stat-label">Bins Detected</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value" id="alertLevel">-</div>
+                                <div class="stat-label">Alert Status</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value" id="modelConfidence">-</div>
+                                <div class="stat-label">Avg Confidence</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Fill level config
+        const FILL_LEVELS = {
+            'empty': { label: 'Empty', class: 'empty', icon: '🟢', priority: 1 },
+            'full': { label: 'Full', class: 'full', icon: '🔴', priority: 2 },
+            'overloaded': { label: 'Overloaded', class: 'overloaded', icon: '🚨', priority: 3 }
+        };
+        // Globals
+        let currentImage = null;
+        let currentFile = null;
+        let videoStream = null;
+        let pollingInterval = null;
+        let isRealtime = false;
+        let isFrozen = false;
+        let frozenFrameData = null;
+        // DOM
+        const imageInput = document.getElementById('imageInput');
+        const analyzeButton = document.getElementById('analyzeButton');
+        const results = document.getElementById('results');
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        const startRealtimeBtn = document.getElementById('startRealtimeBtn');
+        const stopRealtimeBtn = document.getElementById('stopRealtimeBtn');
+        const iouSlider = document.getElementById('iouSlider');
+        const confSlider = document.getElementById('confSlider');
+        const iouValue = document.getElementById('iouValue');
+        const confValue = document.getElementById('confValue');
+        const placeholderText = document.getElementById('placeholderText');
+        const imageUploadSection = document.getElementById('imageUploadSection');
+        const realtimeControls = document.getElementById('realtimeControls');
+        const freezeAnalyzeBtn = document.getElementById('freezeAnalyzeBtn');
+        const unfreezeBtn = document.getElementById('unfreezeBtn');
+        // Slider display
+        iouSlider.addEventListener('input', () => {
+            iouValue.textContent = parseFloat(iouSlider.value).toFixed(2);
+            updateDetectionParams();
+        });
+        confSlider.addEventListener('input', () => {
+            confValue.textContent = parseFloat(confSlider.value).toFixed(2);
+            updateDetectionParams();
+        });
+        iouValue.textContent = parseFloat(iouSlider.value).toFixed(2);
+        confValue.textContent = parseFloat(confSlider.value).toFixed(2);
+        function updateDetectionParams() {
+            fetch('/api/set-params', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    iou: iouSlider.value,
+                    conf: confSlider.value
+                })
+            });
+        }
+        // Image upload
+        imageInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            currentFile = file;
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                currentImage = new Image();
+                currentImage.onload = function() {
+                    stopRealtime();
+                    
+                    // Fit canvas to image dimensions while maintaining aspect ratio
+                    fitCanvasTo(currentImage.width, currentImage.height);
+                    
+                    // Clear canvas and draw the image maintaining aspect ratio
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Calculate scaling to fit the image within canvas while maintaining aspect ratio
+                    const scaleX = canvas.width / currentImage.width;
+                    const scaleY = canvas.height / currentImage.height;
+                    const scale = Math.min(scaleX, scaleY);
+                    
+                    const scaledWidth = currentImage.width * scale;
+                    const scaledHeight = currentImage.height * scale;
+                    
+                    // Center the image on canvas
+                    const offsetX = (canvas.width - scaledWidth) / 2;
+                    const offsetY = (canvas.height - scaledHeight) / 2;
+                    
+                    ctx.drawImage(currentImage, offsetX, offsetY, scaledWidth, scaledHeight);
+                    
+                    placeholderText.style.display = 'none';
+                    analyzeButton.disabled = false;
+                };
+                currentImage.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+        // Analyze image
+        analyzeButton.addEventListener('click', async function() {
+            if (!currentFile) return;
+            
+            // Add pressed state styling
+            analyzeButton.style.background = '#ccc';
+            analyzeButton.style.transform = 'translateY(0px)';
+            analyzeButton.style.boxShadow = '0 2px 8px rgba(111, 163, 114, 0.2)';
+            analyzeButton.disabled = true;
+            
+            showLoading(true);
+            resetResults();
+            
+            const formData = new FormData();
+            formData.append('image', currentFile);
+            formData.append('iou', iouSlider.value);
+            formData.append('conf', confSlider.value);
+            
+            try {
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                showLoading(false);
+                
+                if (data.success) {
+                    displayBinResults(data.detections);
+                    drawBinDetections(data.detections);
+                    updateStatistics(data.statistics);
+                } else {
+                    results.innerHTML = `<div class="error-message">❌ ${data.error}</div>`;
+                }
+            } catch (error) {
+                showLoading(false);
+                results.innerHTML = `<div class="error-message">❌ Error: ${error.message}</div>`;
+            } finally {
+                // Reset button styling
+                analyzeButton.style.background = '';
+                analyzeButton.style.transform = '';
+                analyzeButton.style.boxShadow = '';
+                analyzeButton.disabled = false;
+            }
+        });
+        // Real-time monitoring
+        startRealtimeBtn.addEventListener('click', function() {
+            stopRealtime();
+            results.textContent = 'Starting real-time monitoring...';
+            startRealtimeBtn.style.display = 'none';
+            stopRealtimeBtn.style.display = 'inline-block';
+            
+            // Hide image upload section and show real-time controls
+            imageUploadSection.style.display = 'none';
+            realtimeControls.style.display = 'block';
+            
+            // Keep canvas at current size to prevent jumping (video will match this)
+            placeholderText.style.display = 'none';
+            isRealtime = true;
+            isFrozen = false;
+            
+            // Remove frozen state if any
+            canvas.classList.remove('frozen');
+            
+            // Show connection status
+            checkCameraStatus();
+            
+            // Show video on canvas
+            videoStream = document.createElement('img');
+            videoStream.crossOrigin = 'anonymous';
+            videoStream.style.display = 'none';
+            document.body.appendChild(videoStream);
+            
+            let videoLoadAttempts = 0;
+            const maxAttempts = 5; // Reduced attempts
+            
+            // Function to setup video stream
+            function setupVideoStream() {
+                const timestamp = new Date().getTime();
+                const streamUrl = '/video_feed?' + timestamp;
+                console.log('Setting up video stream:', streamUrl);
+                
+                // First test if we can load a single frame
+                console.log('Testing single frame load...');
+                fetch('/test-frame')
+                    .then(response => {
+                        if (response.ok) {
+                            console.log('✅ Single frame test successful');
+                            videoStream.src = streamUrl;
+                        } else {
+                            console.error('❌ Single frame test failed');
+                            results.innerHTML = '<div class="error-message">❌ Camera frames not available</div>';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('❌ Frame test error:', error);
+                        videoStream.src = streamUrl; // Try anyway
+                    });
+            }
+            
+            videoStream.onload = function() {
+                console.log('✅ Video stream connected successfully');
+                console.log(`Stream URL: ${videoStream.src}`);
+                console.log(`Video dimensions: ${videoStream.naturalWidth}x${videoStream.naturalHeight}`);
+                
+                videoLoadAttempts = 0; // Reset on success
+                
+                // Adjust canvas size if needed
+                if (videoStream.naturalWidth && videoStream.naturalHeight) {
+                    const currentAspect = canvas.width / canvas.height;
+                    const videoAspect = videoStream.naturalWidth / videoStream.naturalHeight;
+                    
+                    if (Math.abs(currentAspect - videoAspect) > 0.1) {
+                        fitCanvasTo(videoStream.naturalWidth, videoStream.naturalHeight);
+                    }
+                }
+                drawVideoFrame();
+                results.innerHTML = '<p>📹 Real-time video active. Click "Freeze & Analyze" to analyze current frame.</p>';
+            };
+            
+            videoStream.onerror = function(e) {
+                videoLoadAttempts++;
+                console.warn(`Video connection attempt ${videoLoadAttempts}/${maxAttempts} failed`);
+                
+                if (videoLoadAttempts < maxAttempts) {
+                    results.innerHTML = `<p>🔄 Connecting to camera... (${videoLoadAttempts}/${maxAttempts})</p>`;
+                    setTimeout(() => {
+                        setupVideoStream();
+                    }, 3000); // Wait 3 seconds between attempts
+                } else {
+                    console.error('Video connection failed after multiple attempts');
+                    results.innerHTML = '<div class="error-message">❌ Unable to connect to camera stream. Please check camera status.</div>';
+                }
+            };
+            
+            // Start the video stream
+            setupVideoStream();
+            
+            // Start periodic status checks
+            startStatusChecks();
+        });
+        
+        function checkCameraStatus() {
+            fetch('/api/camera-status')
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.network_reachable) {
+                        results.innerHTML = '<div class="error-message">❌ Camera not reachable on network. Please check camera power and network connection.</div>';
+                    } else if (!data.stream_active) {
+                        results.innerHTML = '<p>🔄 Camera is reachable but stream not active. Attempting to connect...</p>';
+                    }
+                })
+                .catch(error => {
+                    console.log('Status check failed:', error);
+                });
+        }
+        
+        function startStatusChecks() {
+            if (isRealtime) {
+                setTimeout(() => {
+                    checkCameraStatus();
+                    startStatusChecks();
+                }, 10000); // Check every 10 seconds
+            }
+        }
+        stopRealtimeBtn.addEventListener('click', stopRealtime);
+        
+        // Freeze and analyze current frame
+        freezeAnalyzeBtn.addEventListener('click', async function() {
+            if (!isRealtime || !videoStream) return;
+            
+            // Add pressed state styling
+            freezeAnalyzeBtn.style.background = '#ccc';
+            freezeAnalyzeBtn.style.transform = 'translateY(0px)';
+            freezeAnalyzeBtn.style.boxShadow = '0 2px 8px rgba(111, 163, 114, 0.2)';
+            freezeAnalyzeBtn.disabled = true;
+            
+            // Freeze the video
+            isFrozen = true;
+            canvas.classList.add('frozen');
+            
+            // Switch button visibility
+            freezeAnalyzeBtn.style.display = 'none';
+            unfreezeBtn.style.display = 'inline-block';
+            
+            // Capture current frame for analysis
+            try {
+                // Create a temporary canvas to capture the current frame
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+                
+                // Set canvas size to match video
+                tempCanvas.width = videoStream.naturalWidth || 640;
+                tempCanvas.height = videoStream.naturalHeight || 480;
+                
+                // Draw the current video frame
+                tempCtx.drawImage(videoStream, 0, 0);
+                
+                // Convert to blob for analysis
+                tempCanvas.toBlob(async (blob) => {
+                    if (!blob) {
+                        results.innerHTML = '<div class="error-message">❌ Failed to capture frame</div>';
+                        // Reset button styling
+                        freezeAnalyzeBtn.style.background = '';
+                        freezeAnalyzeBtn.style.transform = '';
+                        freezeAnalyzeBtn.style.boxShadow = '';
+                        freezeAnalyzeBtn.disabled = false;
+                        return;
+                    }
+                    
+                    showLoading(true);
+                    resetResults();
+                    
+                    // Create form data for API call
+                    const formData = new FormData();
+                    formData.append('image', blob, 'frame.jpg');
+                    formData.append('iou', iouSlider.value);
+                    formData.append('conf', confSlider.value);
+                    
+                    try {
+                        const response = await fetch('/api/analyze', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const data = await response.json();
+                        showLoading(false);
+                        
+                        if (data.success) {
+                            displayBinResults(data.detections);
+                            drawFrozenDetections(data.detections);
+                            updateStatistics(data.statistics);
+                        } else {
+                            results.innerHTML = `<div class="error-message">❌ ${data.error}</div>`;
+                        }
+                    } catch (error) {
+                        showLoading(false);
+                        results.innerHTML = `<div class="error-message">❌ Error: ${error.message}</div>`;
+                    } finally {
+                        // Reset button styling
+                        freezeAnalyzeBtn.style.background = '';
+                        freezeAnalyzeBtn.style.transform = '';
+                        freezeAnalyzeBtn.style.boxShadow = '';
+                        freezeAnalyzeBtn.disabled = false;
+                    }
+                }, 'image/jpeg', 0.9);
+                
+            } catch (error) {
+                results.innerHTML = `<div class="error-message">❌ Error capturing frame: ${error.message}</div>`;
+                // Reset button styling
+                freezeAnalyzeBtn.style.background = '';
+                freezeAnalyzeBtn.style.transform = '';
+                freezeAnalyzeBtn.style.boxShadow = '';
+                freezeAnalyzeBtn.disabled = false;
+            }
+        });
+        
+        // Unfreeze the video
+        unfreezeBtn.addEventListener('click', function() {
+            if (!isRealtime) return;
+            
+            // Unfreeze the video
+            isFrozen = false;
+            canvas.classList.remove('frozen');
+            
+            // Switch button visibility
+            unfreezeBtn.style.display = 'none';
+            freezeAnalyzeBtn.style.display = 'inline-block';
+            
+            // Clear results and reset UI
+            results.innerHTML = '<p>📹 Real-time video active. Click "Freeze & Analyze" to analyze current frame.</p>';
+            resetResults();
+        });
+        function stopRealtime() {
+            isRealtime = false;
+            isFrozen = false;
+            frozenFrameData = null;
+            
+            if (videoStream) {
+                videoStream.remove();
+                videoStream = null;
+            }
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
+            
+            // Restore UI to original state
+            startRealtimeBtn.style.display = 'inline-block';
+            stopRealtimeBtn.style.display = 'none';
+            imageUploadSection.style.display = 'block';
+            realtimeControls.style.display = 'none';
+            freezeAnalyzeBtn.style.display = 'inline-block';
+            unfreezeBtn.style.display = 'none';
+            
+            // Remove frozen state
+            canvas.classList.remove('frozen');
+            
+            results.innerHTML = '<p>Bin analysis results will appear here after processing...</p>';
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            placeholderText.style.display = 'flex';
+            
+            // Reset results
+            resetResults();
+        }
+        function drawVideoFrame() {
+            if (!videoStream || !isRealtime) return;
+            
+            // If frozen, don't update the video frame
+            if (isFrozen) {
+                requestAnimationFrame(drawVideoFrame);
+                return;
+            }
+            
+            // Ensure canvas is sized appropriately for video
+            if (videoStream.naturalWidth && videoStream.naturalHeight) {
+                fitCanvasTo(videoStream.naturalWidth, videoStream.naturalHeight);
+            }
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Calculate scaling to fit video within canvas while maintaining aspect ratio
+            const scaleX = canvas.width / videoStream.naturalWidth;
+            const scaleY = canvas.height / videoStream.naturalHeight;
+            const scale = Math.min(scaleX, scaleY);
+            
+            const scaledWidth = videoStream.naturalWidth * scale;
+            const scaledHeight = videoStream.naturalHeight * scale;
+            
+            // Center the video on canvas
+            const offsetX = (canvas.width - scaledWidth) / 2;
+            const offsetY = (canvas.height - scaledHeight) / 2;
+            
+            ctx.drawImage(videoStream, offsetX, offsetY, scaledWidth, scaledHeight);
+            
+            // Use requestAnimationFrame for smooth video rendering
+            requestAnimationFrame(drawVideoFrame);
+        }
+        async function fetchDetections() {
+            try {
+                const response = await fetch('/api/latest-detections');
+                const data = await response.json();
+                
+                if (data.success && data.detections) {
+                    drawDetections(data.detections);
+                    displayBinResults(data.detections);
+                    updateStatistics(data.statistics);
+                } else if (data.rate_limited) {
+                    results.innerHTML = `<div class="error-message">⏳ ${data.message}</div>`;
+                } else {
+                    results.innerHTML = '<p>🔍 No detections available...</p>';
+                }
+            } catch (error) {
+                results.innerHTML = `<div class="error-message">❌ Error: ${error.message}</div>`;
+            }
+        }
+        function drawDetections(detections) {
+            // Draw over current image or video frame
+            if (isRealtime && videoStream) {
+                // For video, redraw the frame first
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                if (videoStream.naturalWidth && videoStream.naturalHeight) {
+                    // Calculate scaling to fit video within canvas while maintaining aspect ratio
+                    const scaleX = canvas.width / videoStream.naturalWidth;
+                    const scaleY = canvas.height / videoStream.naturalHeight;
+                    const scale = Math.min(scaleX, scaleY);
+                    
+                    const scaledWidth = videoStream.naturalWidth * scale;
+                    const scaledHeight = videoStream.naturalHeight * scale;
+                    
+                    // Center the video on canvas
+                    const offsetX = (canvas.width - scaledWidth) / 2;
+                    const offsetY = (canvas.height - scaledHeight) / 2;
+                    
+                    ctx.drawImage(videoStream, offsetX, offsetY, scaledWidth, scaledHeight);
+                    
+                    // Draw detection boxes for video
+                    detections.forEach(detection => {
+                        const [x, y, w, h] = detection.bbox;
+                        
+                        // Scale from YOLO coordinates (640x480) to video natural size
+                        const videoX = (x / 640) * videoStream.naturalWidth;
+                        const videoY = (y / 480) * videoStream.naturalHeight;
+                        const videoW = (w / 640) * videoStream.naturalWidth;
+                        const videoH = (h / 480) * videoStream.naturalHeight;
+                        
+                        // Scale from video coordinates to canvas coordinates
+                        const canvasX = (videoX * scale) + offsetX;
+                        const canvasY = (videoY * scale) + offsetY;
+                        const canvasW = videoW * scale;
+                        const canvasH = videoH * scale;
+                        
+                        let color = '#4a7c59';
+                        if (detection.class === 'full') color = '#dc3545';
+                        if (detection.class === 'overloaded') color = '#d63384';
+                        
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = 4;
+                        ctx.strokeRect(canvasX, canvasY, canvasW, canvasH);
+                        ctx.fillStyle = color + '40';
+                        ctx.fillRect(canvasX, canvasY, canvasW, canvasH);
+                        ctx.font = 'bold 16px Arial';
+                        ctx.fillStyle = color;
+                        ctx.fillText(`${detection.class} (${Math.round(detection.confidence*100)}%)`, canvasX, canvasY-5);
+                    });
+                }
+            } else if (currentImage) {
+                // For static images, use the drawBinDetections function
+                drawBinDetections(detections);
+            } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+        function fitCanvasTo(w, h) {
+            // Set maximum dimensions to prevent layout issues (using initial canvas size as max)
+            const maxWidth = 640;
+            const maxHeight = 480;
+            const minWidth = 400;
+            const minHeight = 300;
+            
+            // Calculate aspect ratio from source
+            const aspectRatio = w / h;
+            
+            // Calculate dimensions while maintaining aspect ratio and respecting max limits
+            let displayWidth, displayHeight;
+            
+            // First, respect maximum dimensions
+            if (w > maxWidth || h > maxHeight) {
+                if (aspectRatio > maxWidth / maxHeight) {
+                    // Image is wider relative to max dimensions - limit by width
+                    displayWidth = maxWidth;
+                    displayHeight = displayWidth / aspectRatio;
+                } else {
+                    // Image is taller relative to max dimensions - limit by height
+                    displayHeight = maxHeight;
+                    displayWidth = displayHeight * aspectRatio;
+                }
+            } else {
+                // Source is smaller than max dimensions, use source size
+                displayWidth = w;
+                displayHeight = h;
+            }
+            
+            // Ensure minimum dimensions are met while maintaining aspect ratio
+            if (displayWidth < minWidth) {
+                displayWidth = minWidth;
+                displayHeight = displayWidth / aspectRatio;
+                
+                // If height exceeds max after adjusting width, limit by height instead
+                if (displayHeight > maxHeight) {
+                    displayHeight = maxHeight;
+                    displayWidth = displayHeight * aspectRatio;
+                }
+            }
+            if (displayHeight < minHeight) {
+                displayHeight = minHeight;
+                displayWidth = displayHeight * aspectRatio;
+                
+                // If width exceeds max after adjusting height, limit by width instead
+                if (displayWidth > maxWidth) {
+                    displayWidth = maxWidth;
+                    displayHeight = displayWidth / aspectRatio;
+                }
+            }
+            
+            // Set canvas internal resolution (for drawing)
+            canvas.width = Math.round(displayWidth);
+            canvas.height = Math.round(displayHeight);
+            
+            // Set canvas display size (CSS)
+            canvas.style.width = displayWidth + 'px';
+            canvas.style.height = displayHeight + 'px';
+        }
+        function dataURLtoBlob(dataurl) {
+            var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+                bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+            while(n--) u8arr[n] = bstr.charCodeAt(n);
+            return new Blob([u8arr], {type:mime});
+        }
+        // Show placeholder on load
+        window.addEventListener('DOMContentLoaded', () => {
+            // Set initial canvas size to match typical video dimensions
+            fitCanvasTo(640, 480);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            placeholderText.style.display = 'flex';
+        });
+        
+        // Show/hide loading state
+        function showLoading(show) {
+            if (show) {
+                results.innerHTML = `
+                    <div class="loading" style="display: block;">
+                        <div class="spinner"></div>
+                        <p>🤖 YOLO11s is analyzing the bin image...</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Reset results
+        function resetResults() {
+            results.innerHTML = '<p>Bin analysis results will appear here after processing...</p>';
+            document.getElementById('fillStatus').textContent = '-';
+            document.getElementById('binCount').textContent = '-';
+            document.getElementById('alertLevel').textContent = '-';
+            document.getElementById('modelConfidence').textContent = '-';
+        }
+        
+        // Display bin analysis results
+        function displayBinResults(detections) {
+            window.latestDetections = detections;
+            // You may want to also save stats if available
+            if (!detections || detections.length === 0) {
+                results.innerHTML = '<p>🔍 No bins detected in the image. Try adjusting the confidence threshold or upload a clearer image.</p>';
+                return;
+            }
+            let resultsHTML = '<div>';
+            detections.forEach((detection, index) => {
+                const fillInfo = FILL_LEVELS[detection.class] || FILL_LEVELS['empty'];
+                const confidence = Math.round(detection.confidence * 100);
+                resultsHTML += `
+                    <div class="fill-level-indicator fill-level-${detection.class}">
+                        ${fillInfo.icon} <strong>Bin ${index + 1}:</strong> ${fillInfo.label} (${confidence}% confidence)
+                    </div>
+                `;
+            });
+            resultsHTML += '</div>';
+            results.innerHTML = resultsHTML;
+        }
+        
+        // Draw detection boxes on canvas
+        function drawBinDetections(detections) {
+            if (!currentImage) return;
+            
+            // Clear canvas and redraw image maintaining aspect ratio
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Calculate scaling to fit the image within canvas while maintaining aspect ratio
+            const scaleX = canvas.width / currentImage.width;
+            const scaleY = canvas.height / currentImage.height;
+            const scale = Math.min(scaleX, scaleY);
+            
+            const scaledWidth = currentImage.width * scale;
+            const scaledHeight = currentImage.height * scale;
+            
+            // Center the image on canvas
+            const offsetX = (canvas.width - scaledWidth) / 2;
+            const offsetY = (canvas.height - scaledHeight) / 2;
+            
+            ctx.drawImage(currentImage, offsetX, offsetY, scaledWidth, scaledHeight);
+            
+            // Draw detection boxes
+            detections.forEach((detection, index) => {
+                const [x, y, w, h] = detection.bbox;
+                
+                // Scale coordinates from YOLO model (640x480) to actual image coordinates
+                const imageX = (x / 640) * currentImage.width;
+                const imageY = (y / 480) * currentImage.height;
+                const imageW = (w / 640) * currentImage.width;
+                const imageH = (h / 480) * currentImage.height;
+                
+                // Scale from image coordinates to canvas coordinates
+                const canvasX = (imageX * scale) + offsetX;
+                const canvasY = (imageY * scale) + offsetY;
+                const canvasW = imageW * scale;
+                const canvasH = imageH * scale;
+                
+                // Set color based on fill level
+                let color;
+                if (detection.class === 'empty') color = '#4a7c59';
+                else if (detection.class === 'full') color = '#dc3545';
+                else if (detection.class === 'overloaded') color = '#d63384';
+                else color = '#4a7c59';
+                
+                // Draw rectangle
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 3;
+                ctx.strokeRect(canvasX, canvasY, canvasW, canvasH);
+                
+                // Add semi-transparent fill
+                ctx.fillStyle = color + '30';
+                ctx.fillRect(canvasX, canvasY, canvasW, canvasH);
+                
+                // Draw label
+                const label = `${FILL_LEVELS[detection.class].label} (${Math.round(detection.confidence * 100)}%)`;
+                ctx.font = 'bold 14px Arial';
+                const textWidth = ctx.measureText(label).width;
+                
+                // Label background
+                ctx.fillStyle = color;
+                ctx.fillRect(canvasX, canvasY - 25, textWidth + 10, 25);
+                
+                // Label text
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(label, canvasX + 5, canvasY - 7);
+            });
+        }
+        
+        // Draw detection boxes on frozen video frame
+        function drawFrozenDetections(detections) {
+            if (!videoStream || !isRealtime || !isFrozen) return;
+            
+            // The canvas already has the frozen frame, just draw detections on top
+            if (videoStream.naturalWidth && videoStream.naturalHeight) {
+                // Calculate scaling to fit video within canvas while maintaining aspect ratio
+                const scaleX = canvas.width / videoStream.naturalWidth;
+                const scaleY = canvas.height / videoStream.naturalHeight;
+                const scale = Math.min(scaleX, scaleY);
+                
+                const scaledWidth = videoStream.naturalWidth * scale;
+                const scaledHeight = videoStream.naturalHeight * scale;
+                
+                // Center the video on canvas
+                const offsetX = (canvas.width - scaledWidth) / 2;
+                const offsetY = (canvas.height - scaledHeight) / 2;
+                
+                // Draw detection boxes
+                detections.forEach(detection => {
+                    const [x, y, w, h] = detection.bbox;
+                    
+                    // Scale from YOLO coordinates (640x480) to video natural size
+                    const videoX = (x / 640) * videoStream.naturalWidth;
+                    const videoY = (y / 480) * videoStream.naturalHeight;
+                    const videoW = (w / 640) * videoStream.naturalWidth;
+                    const videoH = (h / 480) * videoStream.naturalHeight;
+                    
+                    // Scale from video coordinates to canvas coordinates
+                    const canvasX = (videoX * scale) + offsetX;
+                    const canvasY = (videoY * scale) + offsetY;
+                    const canvasW = videoW * scale;
+                    const canvasH = videoH * scale;
+                    
+                    let color = '#4a7c59';
+                    if (detection.class === 'full') color = '#dc3545';
+                    if (detection.class === 'overloaded') color = '#d63384';
+                    
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(canvasX, canvasY, canvasW, canvasH);
+                    ctx.fillStyle = color + '40';
+                    ctx.fillRect(canvasX, canvasY, canvasW, canvasH);
+                    ctx.font = 'bold 16px Arial';
+                    ctx.fillStyle = color;
+                    ctx.fillText(`${detection.class} (${Math.round(detection.confidence*100)}%)`, canvasX, canvasY-5);
+                });
+            }
+        }
+        
+        // Update statistics display
+        function updateStatistics(stats) {
+            if (!stats) return;
+            
+            document.getElementById('fillStatus').textContent = stats.fill_status || '-';
+            document.getElementById('binCount').textContent = stats.bin_count || 0;
+            document.getElementById('alertLevel').textContent = stats.alert_level || '-';
+            document.getElementById('modelConfidence').textContent = stats.avg_confidence ? `${stats.avg_confidence}%` : '-';
+        }
+    </script>
+</body>
+</html>
